@@ -12,10 +12,10 @@ from boid import Boid
 from collections import deque
 from sklearn.preprocessing import MinMaxScaler
 
-default_boids = 50
+default_boids = 64
 default_geometry = "1000x1000"
 
-target_image = pg.image.load("Circle.png")
+target_image = pg.image.load("Smiley.png")
 target = pg.surfarray.array3d(target_image)
 
 def draw(screen, background, boids):
@@ -33,6 +33,7 @@ def draw(screen, background, boids):
 def main(args):
     # Initialise pg.
     pg.init()
+    
     # pg.event.set_allowed([pg.QUIT, pg.KEYDOWN, pg.KEYUP])
 
     # Set up the clock to maintain a relatively constant framerate.
@@ -58,6 +59,7 @@ def main(args):
     energy = 1.0
     min_mae = np.inf
     while True:
+        events = pg.event.get() 
         #Iterate Boids and apply forces
         for b in boids:
             b.update(dt, boids, energy)

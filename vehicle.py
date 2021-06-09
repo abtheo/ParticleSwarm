@@ -101,7 +101,6 @@ class Vehicle(pg.sprite.Sprite):
 
             self.image = overlay
             self.rect = overlay.get_rect(center=self.position)
-            b = 3
         else:
             self.rect = self.image.get_rect(center=self.position)
 

@@ -9,9 +9,9 @@ class Boid(Vehicle):
     # CONFIG
     debug = False
     min_speed = .01
-    max_speed = .2
+    max_speed = .18
     max_force = 1
-    max_turn = 12
+    max_turn = 2
     perception = 60
     crowding = 30
     can_wrap = False
@@ -40,7 +40,7 @@ class Boid(Vehicle):
 
         self.target_img = target_img
 
-        self.k=25
+        self.k=29
         
         # self.force_kernel = np.array([ 
         #     [i,j]
@@ -165,8 +165,10 @@ class Boid(Vehicle):
         steering = self.clamp_force(steering)
 
         jj = self.ksearch()
+        
         if not jj.x == 0:
             dd = jj.as_polar()
+            steering += jj
             self.velocity.from_polar(dd)
 
         # steering += jj
