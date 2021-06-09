@@ -56,9 +56,7 @@ def main(args):
     dt = 1/fps  # dt is the time since last frame.
 
     energy = 1.0
-    maxlen = 3000
-    mae_history = deque(maxlen=maxlen)
-    mae_history.extend([765000000.0]*maxlen)
+    min_mae = np.inf
     while True:
         #Iterate Boids and apply forces
         for b in boids:
@@ -69,11 +67,14 @@ def main(args):
         #Compare to Target image
         # screenshot = pg.surfarray.array3d(pg.display.get_surface())
         # mae = np.sum(np.absolute(target - screenshot))
-        # mae_history.append(mae)
 
-        # #Normalize to 0-1
-        # energy = (mae - min(mae_history)) / (max(mae_history) - min(mae_history))
+        # #Save lowest loss
+        # if mae < min_mae:
+        #     min_mae = mae
 
+        # # #Normalize to 0-1
+        # # energy = (mae - min_mae) / (765000000.0 - min_mae)
+        # energy = mae / 765000000.0
         # print(f"MAE: {mae}, Energy: {energy}")
         
 

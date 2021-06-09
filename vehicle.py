@@ -34,7 +34,7 @@ class Vehicle(pg.sprite.Sprite):
 
         self.rect = self.image.get_rect(center=self.position)
 
-    def update(self, dt, steering, in_center):
+    def update(self, dt, steering, energy):
         self.acceleration = steering * dt
 
         # enforce turn limit
@@ -53,17 +53,17 @@ class Vehicle(pg.sprite.Sprite):
 
         
         #Add inertia parameter
-        if in_center == 1:
-            self.velocity *= 1.05
-        else:
-            self.velocity *= max(in_center, self.min_speed)
-
+        # if in_center == 1:
+        #     self.velocity *= 1.05
+        # else:
+        #     self.velocity *= max(in_center, self.min_speed)
+        
         # enforce speed limit
         speed, self.heading = self.velocity.as_polar()
-        if speed < self.min_speed:
+        if speed < self.min_speed*energy:
             self.velocity.scale_to_length(self.min_speed)
 
-        if speed > self.max_speed:
+        if speed > self.max_speed*(1+energy):
             self.velocity.scale_to_length(self.max_speed)
 
 

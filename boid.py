@@ -11,10 +11,10 @@ class Boid(Vehicle):
     min_speed = .01
     max_speed = .2
     max_force = 1
-    max_turn = 10
+    max_turn = 12
     perception = 60
-    crowding = 15
-    can_wrap = True
+    crowding = 30
+    can_wrap = False
     edge_distance_pct = 5
     ###############
 
@@ -40,7 +40,7 @@ class Boid(Vehicle):
 
         self.target_img = target_img
 
-        self.k=13
+        self.k=25
         
         # self.force_kernel = np.array([ 
         #     [i,j]
@@ -118,12 +118,36 @@ class Boid(Vehicle):
         #     net_force += force
         # return net_force/np.sum(bool_kernel)
 
+    def ksearch(self):
+        k = self.k #shorthand
+
+        # self.target_img
+        kernel = self.target_img[self.safe_edge(self.position.x-k//2):self.safe_edge(self.position.x+k//2+1), 
+                                self.safe_edge(self.position.y-k//2,axis=1):self.safe_edge(self.position.y+k//2+1,axis=1)]
+
+        bool_kernel = np.any(kernel==255, axis=-1).swapaxes(0,1)
+        #Shape mismatch, kernel cut-off by boundary
+        if not bool_kernel.shape[0] == k or not bool_kernel.shape[1] == k:
+            # return pg.Vector2()
+            return pg.Vector2()
+
+        if not bool_kernel.any():
+            return pg.Vector2()
+
+        net_force = pg.Vector2()
+
+        for force in self.force_kernel[bool_kernel]:
+            net_force += force
+
+        mean_force = np.mean(self.force_kernel[bool_kernel], axis=0)
+        return pg.Vector2(x=mean_force[0],y=mean_force[1])
+
 
     def update(self, dt, boids, energy):
         steering = pg.Vector2()
 
-        # if not self.can_wrap:
-        #     steering += self.avoid_edge()
+        if not self.can_wrap:
+            steering += self.avoid_edge()
 
         neighbors = self.get_neighbors(boids)
         if neighbors:
@@ -140,12 +164,16 @@ class Boid(Vehicle):
 
         steering = self.clamp_force(steering)
 
+        jj = self.ksearch()
+        if not jj.x == 0:
+            dd = jj.as_polar()
+            self.velocity.from_polar(dd)
 
-        in_center = self.kernel_search()
+        # steering += jj
         # if in_center:
         #     steering = self.velocity * -0.1
 
-        super().update(dt, steering, in_center)
+        super().update(dt, steering, energy)
 
     def get_neighbors(self, boids):
         neighbors = []
