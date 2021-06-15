@@ -1,11 +1,16 @@
 import pygame as pg
 import numpy as np
+from random import uniform
 
 class Vehicle(pg.sprite.Sprite):
     # default image is a li'l white triangle
     image = pg.Surface((10, 10), pg.SRCALPHA)
-    pg.draw.polygon(image, pg.Color('white'),
-                    [(15, 5), (0, 2), (0, 8)])
+
+    color = pg.Color('black')
+
+    size_vector = [(5, 5), (0, 2), (0, 8)]
+
+    pg.draw.polygon(image, color,size_vector)
 
     def __init__(self, position, velocity, min_speed, max_speed,
                  max_force, can_wrap):
@@ -16,6 +21,7 @@ class Vehicle(pg.sprite.Sprite):
         self.min_speed = min_speed
         self.max_speed = max_speed
         self.max_force = max_force
+        self.base_max_speed = max_speed
 
         # set position
         dimensions = len(position)
@@ -34,12 +40,20 @@ class Vehicle(pg.sprite.Sprite):
 
         self.rect = self.image.get_rect(center=self.position)
 
-    def update(self, dt, steering, energy):
+    def mean_colors(self,a, b, a_multi=4):
+        R = (a.r*a_multi + b.r) // (a_multi+1)
+        G = (a.g*a_multi + b.g) // (a_multi+1)
+        B = (a.b*a_multi + b.b) // (a_multi+1)
+        return pg.Color(R, G, B, 255)
+
+    def update(self, dt, steering, new_direction, color):
         self.acceleration = steering * dt
 
         # enforce turn limit
         _, old_heading = self.velocity.as_polar()
-        new_velocity = self.velocity + self.acceleration * dt
+        # new_velocity = self.velocity + self.acceleration * dt
+        new_velocity = self.velocity + new_direction + self.acceleration * dt
+
         speed, new_heading = new_velocity.as_polar()
 
         heading_diff = 180 - (180 - new_heading + old_heading) % 360
@@ -60,10 +74,15 @@ class Vehicle(pg.sprite.Sprite):
         
         # enforce speed limit
         speed, self.heading = self.velocity.as_polar()
-        if speed < self.min_speed*energy:
+        if speed == 0: 
+            self.velocity = pg.math.Vector2(
+                uniform(-0.25, 0.25) * self.max_speed,
+                uniform(-0.25, 0.25) * self.max_speed)
+        
+        if speed < self.min_speed:
             self.velocity.scale_to_length(self.min_speed)
 
-        if speed > self.max_speed*(1+energy):
+        if speed > self.max_speed:
             self.velocity.scale_to_length(self.max_speed)
 
 
@@ -73,8 +92,16 @@ class Vehicle(pg.sprite.Sprite):
         if self.can_wrap:
             self.wrap()
 
-        # draw
-        self.image = pg.transform.rotate(Vehicle.image, -self.heading)
+        #Change colour away from white more quickly
+        if np.sum(self.color) > 225*3:
+            self.color = self.mean_colors(self.color, color, a_multi=4)
+        else:
+            self.color = self.mean_colors(self.color, color, a_multi=8)
+
+        image = pg.Surface((10, 10), pg.SRCALPHA)
+        pg.draw.polygon(image, self.color,self.size_vector)
+        self.image = pg.transform.rotate(image, -self.heading)
+
 
         if self.debug:
             center = pg.Vector2((50, 50))

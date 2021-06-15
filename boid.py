@@ -3,17 +3,18 @@ from random import uniform
 from vehicle import Vehicle
 import numpy as np
 from scipy import signal
+import random
 
 class Boid(Vehicle):
 
     # CONFIG
+    k=5
     debug = False
-    min_speed = .01
-    max_speed = .18
+    min_speed = .001
+    max_speed = .05
     max_force = 1
-    max_turn = 2
-    perception = 60
-    crowding = 30
+    max_turn = 360
+    perception = 4
     can_wrap = False
     edge_distance_pct = 5
     ###############
@@ -40,142 +41,111 @@ class Boid(Vehicle):
 
         self.target_img = target_img
 
-        self.k=29
-        
-        # self.force_kernel = np.array([ 
-        #     [i,j]
-        #     for i in range(-self.k//2+1,self.k//2+1)
-        #     for j in range(-self.k//2+1,self.k//2+1)]) / (self.k//2-1)
-
-        thing = []
+        #Calculate Force kernel -
+        #(x,y) distance from origin for each cells
+        Mf = []
+        Imf = []
         for i in range(-self.k//2+1,self.k//2+1):
             row = []
+            row2 = []
             for j in range(-self.k//2+1,self.k//2+1):
                 row.append([j,i])
-            thing.append(row)
-        self.force_kernel = np.array(thing)
+                row2.append((i**2 + j**2)**0.5)
+            Mf.append(row)
+            Imf.append(row2)
 
-    def gkern(self, std=3):
-        gkern1d = signal.gaussian(self.k, std=std).reshape(self.k, 1)
-        gkern2d = np.outer(gkern1d, gkern1d)
-        return gkern2d
+        self.force_kernel = np.array(Mf)
+        #Calculate Distance Kernel -
+        #Euclidean of each (x,y) in the Force Kernel
+        self.distance_kernel = np.array(Imf)
+        mask = (self.distance_kernel != 0)
+        self.distance_kernel[mask] = np.divide(1,self.distance_kernel[mask])**2
+        self.distance_kernel = np.expand_dims(self.distance_kernel, axis=-1)
 
     def separation(self, boids):
         steering = pg.Vector2()
         for boid in boids:
             dist = self.position.distance_to(boid.position)
-            if dist < self.crowding:
+            if dist < self.perception:
                 steering -= boid.position - self.position
         steering = self.clamp_force(steering)
         return steering
 
-    def alignment(self, boids):
-        steering = pg.Vector2()
-        for boid in boids:
-            steering += boid.velocity
-        steering /= len(boids)
-        steering -= self.velocity
-        steering = self.clamp_force(steering)
-        return steering / 8
+    # def alignment(self, boids):
+    #     steering = pg.Vector2()
+    #     for boid in boids:
+    #         steering += boid.velocity
+    #     steering /= len(boids)
+    #     steering -= self.velocity
+    #     steering = self.clamp_force(steering)
+    #     return steering / 8
 
-    def cohesion(self, boids):
-        steering = pg.Vector2()
-        for boid in boids:
-            steering += boid.position
-        steering /= len(boids)
-        steering -= self.position
-        steering = self.clamp_force(steering)
-        return steering / 100
+    # def cohesion(self, boids):
+    #     steering = pg.Vector2()
+    #     for boid in boids:
+    #         steering += boid.position
+    #     steering /= len(boids)
+    #     steering -= self.position
+    #     steering = self.clamp_force(steering)
+    #     return steering / 1000
 
     def safe_edge(self, edge, axis=0):
         return int(max(0, min(self.target_img.shape[axis], edge)))
 
-    def kernel_search(self):
+    def color_search(self):
         k = self.k #shorthand
+        
+        #Find kernel positions in image
+        xmin = self.safe_edge(self.position.x-k//2)
+        xmax = max(xmin+1, self.safe_edge(self.position.x+k//2+1))
+        ymin = self.safe_edge(self.position.y-k//2,axis=1)
+        ymax = max(ymin+1, self.safe_edge(self.position.y+k//2+1,axis=1))
 
-        # self.target_img
-        kernel = self.target_img[self.safe_edge(self.position.x-k//2):self.safe_edge(self.position.x+k//2+1), 
-                                self.safe_edge(self.position.y-k//2,axis=1):self.safe_edge(self.position.y+k//2+1,axis=1)]
-
-        bool_kernel = np.any(kernel==255, axis=-1)
+        #Extract kernel
+        kernel = self.target_img[xmin:xmax, ymin:ymax]
         #Shape mismatch, kernel cut-off by boundary
-        if not bool_kernel.shape[0] == k or not bool_kernel.shape[1] == k:
-            # return pg.Vector2()
-            return 1
+        if not kernel.shape[0] == k or not kernel.shape[1] == k:
+            return pg.Vector2(), self.color
 
-        # net_force = pg.Vector2()
-        # if np.sum(bool_kernel) == 0:
-        #     return pg.Vector2()
-        return 1 - np.sum(bool_kernel) / (k*k)
-            # return False
-            # return pg.Vector2()
+        center = kernel[kernel.shape[0]//2, kernel.shape[1]//2]
 
-        # return pg.math.Vector2(
-        #     uniform(-1, 1) * Boid.max_speed,
-        #     uniform(-1, 1) * Boid.max_speed)
+        color = np.array([self.color.r, self.color.g, self.color.b])
 
-        # for force in self.force_kernel[bool_kernel]:
-        #     net_force += force
-        # return net_force/np.sum(bool_kernel)
+        # center_old = kernel[k//2,k//2]
+        center_color = pg.Color(int(center[0]), int(center[1]), int(center[2]), 255)
+        if center_color == self.color and not np.sum(center_color) > 225*3:
+            # return pg.Vector2(), self.color
+            return -self.velocity*0.001, self.color
+        
+        color_kernel = np.linalg.norm(kernel-color,axis=-1)
+        mask = (color_kernel != 0)
+        #Find euclidean distance in colorspace
+        color_kernel[mask] = np.divide(1,color_kernel[mask])**2
+        color_kernel = np.expand_dims(color_kernel, axis=-1)
+        #Mean (Force * Color * Dist)
+        vector_kernel = color_kernel*self.force_kernel*self.distance_kernel
+        mean_force = np.mean(vector_kernel, axis=(0,1))
+        return pg.Vector2(x=mean_force[0],y=mean_force[1]), center_color
 
-    def ksearch(self):
-        k = self.k #shorthand
-
-        # self.target_img
-        kernel = self.target_img[self.safe_edge(self.position.x-k//2):self.safe_edge(self.position.x+k//2+1), 
-                                self.safe_edge(self.position.y-k//2,axis=1):self.safe_edge(self.position.y+k//2+1,axis=1)]
-
-        bool_kernel = np.any(kernel==255, axis=-1).swapaxes(0,1)
-        #Shape mismatch, kernel cut-off by boundary
-        if not bool_kernel.shape[0] == k or not bool_kernel.shape[1] == k:
-            # return pg.Vector2()
-            return pg.Vector2()
-
-        if not bool_kernel.any():
-            return pg.Vector2()
-
-        net_force = pg.Vector2()
-
-        for force in self.force_kernel[bool_kernel]:
-            net_force += force
-
-        mean_force = np.mean(self.force_kernel[bool_kernel], axis=0)
-        return pg.Vector2(x=mean_force[0],y=mean_force[1])
-
-
-    def update(self, dt, boids, energy):
+    def update(self, dt, boids):
         steering = pg.Vector2()
 
         if not self.can_wrap:
             steering += self.avoid_edge()
 
-        neighbors = self.get_neighbors(boids)
-        if neighbors:
-            separation = self.separation(neighbors)
-            # alignment = self.alignment(neighbors)
-            # cohesion = self.cohesion(neighbors)
 
-            # DEBUG
-            # separation *= 0
-            # alignment *= 0
-            # cohesion *= 0
+        separation = self.separation(boids)
+        # alignment = self.alignment(neighbors)
+        # cohesion = self.cohesion(neighbors)
 
-            steering += separation #+ alignment# + cohesion
-
+        steering += separation #+ cohesion #+ alignment
+        vel, color = self.color_search()
+        steering += vel
+        new_direction = self.clamp_force(self.velocity + vel)
         steering = self.clamp_force(steering)
 
-        jj = self.ksearch()
-        
-        if not jj.x == 0:
-            dd = jj.as_polar()
-            steering += jj
-            self.velocity.from_polar(dd)
-
-        # steering += jj
-        # if in_center:
-        #     steering = self.velocity * -0.1
-
-        super().update(dt, steering, energy)
+        # color = random.choice([pg.Color('green'), pg.Color('blue'), pg.Color('red')])
+        super().update(dt, steering, new_direction, color)
 
     def get_neighbors(self, boids):
         neighbors = []

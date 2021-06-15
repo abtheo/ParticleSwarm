@@ -1,28 +1,20 @@
-# Import standard modules.
 import argparse
 import sys
-
-# Import non-standard modules.
 import pygame as pg
 from pygame.locals import *
 import numpy as np
-
-# Import local modules
 from boid import Boid
-from collections import deque
-from sklearn.preprocessing import MinMaxScaler
+from collections import deque   
+import glob
+import matplotlib.pyplot as plt
+import random
+from PIL import Image
 
-default_boids = 64
-default_geometry = "1000x1000"
-
-target_image = pg.image.load("Smiley.png")
-target = pg.surfarray.array3d(target_image)
 
 def draw(screen, background, boids):
     """
     Draw things to the window. Called once per frame.
     """
-
     # Redraw screen here
     boids.clear(screen, background)
     dirty = boids.draw(screen)
@@ -30,70 +22,85 @@ def draw(screen, background, boids):
     # Flip the display so that the things we drew actually show up.
     pg.display.update(dirty)
 
-def main(args):
+def main(target_img, num_boids=256, geometry="256x256", iterations=500):
     # Initialise pg.
     pg.init()
-    
-    # pg.event.set_allowed([pg.QUIT, pg.KEYDOWN, pg.KEYUP])
 
     # Set up the clock to maintain a relatively constant framerate.
     fps = 60.0
     fpsClock = pg.time.Clock()
 
     # Set up the window.
-    window_width, window_height = [int(x) for x in args.geometry.split("x")]
+    window_width, window_height = [int(x) for x in geometry.split("x")]
     flags = DOUBLEBUF
 
     screen = pg.display.set_mode((window_width, window_height), flags)
     screen.set_alpha(None)
-    background = pg.Surface(screen.get_size()).convert()
-    background.fill(pg.Color('black'))
+    background = pg.Surface((window_width, window_height)).convert()
+    background.fill(pg.Color('white'))
+    screen.fill(pg.Color('white'))
+    pg.display.flip()
 
     boids = pg.sprite.RenderUpdates()
 
-    add_boids(boids, args.num_boids)
+    add_boids(boids, num_boids, target_img)
 
     # Main game loop.
     dt = 1/fps  # dt is the time since last frame.
 
-    energy = 1.0
     min_mae = np.inf
-    while True:
+    min_screen = []
+    # while True:
+    for t in range(iterations):
         events = pg.event.get() 
         #Iterate Boids and apply forces
         for b in boids:
-            b.update(dt, boids, energy)
+            b.update(dt, boids)
         
         draw(screen, background, boids)
         #Get screenshot of game
         #Compare to Target image
-        # screenshot = pg.surfarray.array3d(pg.display.get_surface())
-        # mae = np.sum(np.absolute(target - screenshot))
+        screenshot = pg.surfarray.array3d(pg.display.get_surface())
+        tmask = (np.sum(target_img, axis=-1) < 225*3)
+        mae = np.sum(np.absolute(target_img[tmask] - screenshot[tmask]))
 
-        # #Save lowest loss
-        # if mae < min_mae:
-        #     min_mae = mae
-
-        # # #Normalize to 0-1
-        # # energy = (mae - min_mae) / (765000000.0 - min_mae)
-        # energy = mae / 765000000.0
-        # print(f"MAE: {mae}, Energy: {energy}")
-        
 
         dt = fpsClock.tick(fps)
+        if t < 20:
+            continue
+        # #Save lowest loss
+        if mae < min_mae:
+            min_mae = mae
+            min_screen = screenshot
 
 
-def add_boids(boids, num_boids):
+    return min_screen, min_mae
+
+
+def add_boids(boids, num_boids, target_img):
     for _ in range(num_boids):
-        boids.add(Boid(target_img=target))
+        boids.add(Boid(target_img=target_img))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Emergent flocking.')
-    parser.add_argument('--geometry', metavar='WxH', type=str,
-                        default=default_geometry, help='geometry of window')
-    parser.add_argument('--number', dest='num_boids', default=default_boids,
-                        help='number of boids to generate')
-    args = parser.parse_args()
+    # target_image = pg.image.load("Pikachu_256.png")
+    # target = pg.surfarray.array3d(target_image)
+    # main(target)
+    files = glob.glob("./pkmn_test/*.jpg")
+    # random.seed(12)
+    # random.shuffle(files)
+    for i,fn in enumerate(files):
+        target_image = pg.image.load(fn)
+        target = pg.surfarray.array3d(target_image)
 
-    main(args)
+        out_name = f"./results/{i}.png"
+
+        min_screen, mae = main(target, num_boids=400, geometry="256x256")
+        min_screen = min_screen.swapaxes(0,1)
+        with open("Log.txt", "a") as file_object:
+            file_object.write(f"\n{fn}, {mae}, {out_name}")
+        
+        
+        im = Image.fromarray(np.uint8(min_screen))
+        im.save(out_name)
+        
