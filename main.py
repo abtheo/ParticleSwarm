@@ -83,12 +83,9 @@ def add_boids(boids, num_boids, target_img):
 
 
 if __name__ == "__main__":
-    # target_image = pg.image.load("Pikachu_256.png")
-    # target = pg.surfarray.array3d(target_image)
-    # main(target)
-    files = glob.glob("./pkmn_test/*.jpg")
     # random.seed(12)
     # random.shuffle(files)
+    files = glob.glob("./pkmn_test/*.jpg")
     for i,fn in enumerate(files):
         target_image = pg.image.load(fn)
         target = pg.surfarray.array3d(target_image)
@@ -96,6 +93,7 @@ if __name__ == "__main__":
         out_name = f"./results/{i}.png"
 
         min_screen, mae = main(target, num_boids=400, geometry="256x256")
+        print(f"File {fn}\nMinumum MAE: {mae}")
         min_screen = min_screen.swapaxes(0,1)
         with open("Log.txt", "a") as file_object:
             file_object.write(f"\n{fn}, {mae}, {out_name}")
